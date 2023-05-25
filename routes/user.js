@@ -30,6 +30,6 @@ router.get(
   authMiddleware,
   GET_USER_BY_ID_WITH_TICKETS
 );
-router.post("/deposit", DEPOSIT);
+router.post("/deposit", authMiddleware, DEPOSIT);
 
 module.exports = router;
