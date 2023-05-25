@@ -3,10 +3,10 @@ const UserModel = require("../models/user");
 const TicketModel = require("../models/ticket");
 
 module.exports.BUY_TICKET = async (req, res) => {
-  try {
+  try { 
     const { title, ticket_price, from_location, to_location, to_location_photo_url, userId } = req.body;
-
-    const user = await UserModel.findOne({ userId });
+    console.log(`userId: ${userId}`);
+    const user = await UserModel.findOne({ _id: userId });
 
     if (!user) {
       return res.status(404).json({ response: "User not found" });
@@ -29,8 +29,8 @@ module.exports.BUY_TICKET = async (req, res) => {
 
     const remainingBalance = user.money_balance - ticket_price;
     await UserModel.updateOne(
-      { id: req.body.id },
-      { $push: { tickets: createdTicket.id }, money_balance: remainingBalance }
+      { _id: userId },
+      { $push: { bought_tickets: createdTicket.id }, money_balance: remainingBalance }
     );
 
     return res

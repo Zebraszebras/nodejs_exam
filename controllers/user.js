@@ -37,17 +37,24 @@ module.exports.SIGN_UP = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    const validationErrors = validateSignUp(name, email, password);
+    if (validationErrors.length > 0) {
+      return res.status(400).json(validationErrors);
+    }
+
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ response: "User already exists" });
     }
 
     const userId = uniqid();
+    const nameStartingUppercase = name.charAt(0).toUpperCase() + name.slice(1);
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new UserModel({
-      name,
+      name: nameStartingUppercase,
       password: hashedPassword,
       email,
+      money_balance: 0,
       _id: userId,
     });
 
@@ -67,6 +74,32 @@ module.exports.SIGN_UP = async (req, res) => {
     return res.status(500).json({ response: "ERROR, please try later" });
   }
 };
+
+function validateSignUp(name, email, password) {
+  const validationErrors = [];
+
+  if (!name) {
+    validationErrors.push("Name is required");
+  }
+
+  if (!email) {
+    validationErrors.push("Email is required");
+  } else {
+    if (email.indexOf("@") < 0) {
+      validationErrors.push("@ symbol required in Email");
+    }
+  }
+
+  if (!password) {
+    validationErrors.push("Password is required");
+  } else if (password.length < 6 || !/\d/.test(password)) {
+    validationErrors.push(
+      "Password must be at least 6 symbols length and contain at least 1 digit"
+    );
+  }
+
+  return validationErrors;
+}
 
 module.exports.LOG_IN = async (req, res) => {
   try {
@@ -100,7 +133,7 @@ module.exports.LOG_IN = async (req, res) => {
 
 module.exports.GET_NEW_JWT_TOKEN = async (req, res) => {
   try {
-    const token = generateJWTToken(req.user.id);
+    const token = generateJWTToken(req.body.userId);
     res.status(200).json({ response: "New JWT token generated", jwt: token });
   } catch (err) {
     console.log("ERR", err);
@@ -110,7 +143,7 @@ module.exports.GET_NEW_JWT_TOKEN = async (req, res) => {
 
 module.exports.JWT_REFRESH_TOKEN = async (req, res) => {
   try {
-    const refreshToken = generateRefreshToken(req.user.id);
+    const refreshToken = generateRefreshToken(req.body.userId);
     res
       .status(200)
       .json({ response: "JWT token refreshed", refreshToken: refreshToken });
@@ -134,7 +167,7 @@ module.exports.GET_ALL_USERS = async (req, res) => {
 
 module.exports.GET_USER_BY_ID = async (req, res) => {
   try {
-    const user = await UserModel.findOne({ id: req.params.id });
+    const user = await UserModel.findOne({ _id: req.params.id });
 
     if (!user) {
       res.status(404).json({ response: "User not found" });
@@ -149,11 +182,11 @@ module.exports.GET_USER_BY_ID = async (req, res) => {
 
 module.exports.GET_ALL_USERS_WITH_TICKETS = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.body.userId;
 
     const aggregatedUserData = await UserModel.aggregate([
       {
-        $match: { id: userId },
+        $match: { _id: userId },
       },
       {
         $lookup: {
@@ -198,9 +231,8 @@ module.exports.GET_USER_BY_ID_WITH_TICKETS = async (req, res) => {
       {
         $match: { userId: mongoose.Types.ObjectId(user.id) },
       },
-      { $group: { _id: "$userId", totalTickets: { $sum: 1 } } }
+      { $group: { _id: "$userId", totalTickets: { $sum: 1 } } },
     ]).exec();
-    
 
     const userWithTickets = {
       id: user.id,
@@ -215,19 +247,17 @@ module.exports.GET_USER_BY_ID_WITH_TICKETS = async (req, res) => {
   }
 };
 
-const UserModelDeposit = require('../models/user');
-
 module.exports.DEPOSIT = async (req, res) => {
   try {
-    const { title, ticket_price, from_location, to_location, to_location_photo_url, _id } = req.body;
+    const { amount } = req.body;
+    const userId = req.body.userId;
 
-    const depositAmount = Math.floor(Math.random() * 100) + 1;
-
-    const user = await UserModelDeposit.findOneAndUpdate(
-      { _id },
-      { $inc: { money_balance: depositAmount } },
-      { new: true }
+    const user = await UserModel.findOneAndUpdate(
+      { _id: userId },
+      { $inc: { money_balance: amount } }
     );
+
+    user.money_balance += amount;
 
     return res.status(200).json({ user });
   } catch (err) {
